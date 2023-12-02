@@ -1,0 +1,3 @@
+(library
+ (name day01)
+ (libraries base))
