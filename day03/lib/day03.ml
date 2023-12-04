@@ -98,7 +98,7 @@ let gear_candidates puzzle part_numbers =
   List.map part_numbers ~f:(fun part_number -> (part_number, neighbors part_number))
   |> List.map ~f:(fun (part_number, candidates) -> (part_number, List.filter candidates ~f:is_gear_candidate))
 
-let gear_power part_numbers =
+let gear_ratio part_numbers =
   List.map part_numbers ~f:(fun part_number -> part_number.value)
   |> List.fold ~init:1 ~f:( * )
 
@@ -107,7 +107,7 @@ let part2 puzzle =
   |> List.filter ~f:(is_part_number puzzle)
   |> gear_candidates puzzle
   |> gear_adjacent_part_numbers
-  |> List.map ~f:gear_power
+  |> List.map ~f:gear_ratio
   |> List.fold ~init:0 ~f:(+)
   |> Fn.flip (/) 2
   |> Int.to_string
