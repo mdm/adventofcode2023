@@ -43,10 +43,20 @@ let part1 puzzle =
   |> List.fold ~init:0 ~f:(+)
   |> Int.to_string
 
-let rec count_cards cards card =
-  let winning = count_winning_numbers card in
-  let copies = List.range (card.id + 1) (card.id + winning + 1) in
-  List.fold copies ~init:1 ~f:(fun acc c -> acc + (count_cards cards cards.(c - 1)))  
+let count_cards cards card =
+  let memo = Array.create ~len:(Array.length cards) None in
+  let rec count_cards_inner cards card =
+    match memo.(card.id - 1) with
+      Some(result) -> result
+    | None ->
+      let winning = count_winning_numbers card in
+      let copies = List.range (card.id + 1) (card.id + winning + 1) in
+      let result = List.fold copies ~init:1 ~f:(fun acc c -> acc + (count_cards_inner cards cards.(c - 1))) in
+      memo.(card.id - 1) <- Some(result);
+      result
+  in
+  count_cards_inner cards card
+
 
 let part2 puzzle =
   let cards = Array.of_list puzzle in
