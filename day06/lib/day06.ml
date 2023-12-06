@@ -31,12 +31,11 @@ let push_wins race push =
 
 let ways_to_win race =
   List.range 0 race.time
-  |> List.filter ~f:(push_wins race)
+  |> List.count ~f:(push_wins race)
   
 let part1 puzzle =
   puzzle
   |> List.map ~f:ways_to_win
-  |> List.map ~f:List.length
   |> List.reduce ~f:( * )
   |> Option.value_exn
   |> Int.to_string
@@ -52,9 +51,17 @@ let big_race races =
   let distances = List.map races ~f:(fun race -> race.distance) in
   { time = concat_numbers times; distance = concat_numbers distances; }
 
+let fast_ways_to_win race =
+  let median = race.time / 2 in
+  let median_count = if Int.equal (race.time % 2) 0 then 1 else 2 in
+  let offset = Float.of_int (-race.time) in
+  let sqrt = Float.sqrt (Float.of_int (race.time * race.time - 4 * -1 * -race.distance)) in
+  let min_push = Float.min ((offset -. sqrt) /. -2.0) ((offset +. sqrt) /. -2.0) in
+  let min_push = Option.value_exn (Float.iround_down (min_push +. 1.0)) in
+  if not (push_wins race median) then 0 else median_count + 2 * (median - min_push)
+
 let part2 puzzle =
   puzzle
   |> big_race
-  |> ways_to_win
-  |> List.length
+  |> fast_ways_to_win
   |> Int.to_string
