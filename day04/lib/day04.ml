@@ -4,7 +4,7 @@ type card =
   { id: int;
     winning_numbers: int list;
     my_numbers: int list;
-  } [@@deriving show]
+  }
 
 let numbers_of_string ns =
   String.strip ns
