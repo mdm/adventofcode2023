@@ -1,0 +1,4 @@
+(executable
+ (public_name day08)
+ (name main)
+ (libraries day08 base stdio))
