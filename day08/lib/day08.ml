@@ -56,18 +56,6 @@ let part1 puzzle =
   step 0 len (to_int "AAA") instructions map
   |> Int.to_string
 
-let rec step_all i len locations instructions map =
-  let instruction = instructions.(i % len) in
-  let destinations location = Hashtbl.find_exn map location in
-  let finished = List.for_all locations ~f:(fun location -> Int.equal (location % 26) 25) in
-  let lefts locations = List.map locations ~f:(fun location -> (destinations location).left) in
-  let rights locations = List.map locations ~f:(fun location -> (destinations location).right) in
-  Stdio.print_endline (Int.to_string i);
-  if finished then i else match instruction with
-      'L' -> step_all (i + 1) len (lefts locations) instructions map
-    | 'R' -> step_all (i + 1) len (rights locations) instructions map
-    | _ -> assert false
-
 let find_loop i len location instructions map =
   let history = Hashtbl.create (module Int) in
   let rec find_loop_inner i len location instructions map =
