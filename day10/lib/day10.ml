@@ -103,7 +103,7 @@ let neighbors puzzle x y =
   |> List.map ~f:(fun (offset_x, offset_y) -> (x + offset_x, y + offset_y))
   |> List.filter ~f:(fun (neighbor_x, neighbor_y) -> on_grid puzzle neighbor_x neighbor_y)
 
-let bfs puzzle loop x y =
+let bfs puzzle loop inner =
   let visited = Hashtbl.create (module Int) in
   let queue = Queue.create () in
   let update (neighbor_x, neighbor_y) = match Hashtbl.add visited ~key:(neighbor_y * (Array.length puzzle.(0)) + neighbor_x) ~data:true with
@@ -120,8 +120,7 @@ let bfs puzzle loop x y =
         bfs_inner ((current_x, current_y)::acc)
     | None -> acc
   in
-  Queue.enqueue queue (x, y);
-  Hashtbl.add visited ~key:(y * (Array.length puzzle.(0)) + x) |> (fun _ -> ());
+  List.iter inner ~f:update;
   bfs_inner []
 
 let rec pairs list =
@@ -179,15 +178,9 @@ let enclosed puzzle loop =
   |> List.concat
   |> List.dedup_and_sort ~compare:(fun a b -> (fst a * (Array.length puzzle) + snd a) - (fst b * (Array.length puzzle) + snd b))
 
-let expand puzzle loop inner = 
-  inner
-  |> List.map ~f:(fun (x, y) -> bfs puzzle loop x y)
-  |> List.concat
-  |> List.dedup_and_sort ~compare:(fun a b -> (fst a * (Array.length puzzle) + snd a) - (fst b * (Array.length puzzle) + snd b))
-
 let part2 puzzle =
   let loop = find_loop puzzle in
   enclosed puzzle loop
-  |> expand puzzle loop
+  |> bfs puzzle loop
   |> List.length
   |> Int.to_string
