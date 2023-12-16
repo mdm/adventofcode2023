@@ -9,11 +9,6 @@ let parse input =
   |> List.hd_exn
   |> parse_line
 
-let rec pairs list =
-  match list with
-    x::y::_ -> (x, y)::(pairs (List.tl_exn list))
-  | _ -> []
-
 let hash input =
   let step acc c = (acc + Char.to_int c) * 17 % 256 in
   let rec hash' acc input =
