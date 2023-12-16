@@ -34,61 +34,11 @@ let rec count_arrangements acc record damaged_groups =
                   '?' -> count_arrangements ('.'::acc) record damaged_groups + count_arrangements ('#'::acc) record damaged_groups
                 | _ -> count_arrangements (sprint::acc) record damaged_groups
 
-let valid_arrangement' arrangement group =
-  arrangement
-  |> to_group_lengths
-  |> List.count ~f:(Int.equal group)
-  |> Int.equal 1
-
-(* let count_arrangements_single acc used record_group damaged_group =
-
-let rec count_arrangements'' acc used record damaged_groups =
-  match (record, damaged_groups) with
-    ([], []) -> 1
-    | ([], _) -> 0
-    | (_, []) -> if List.mem record '#' ~equal:Char.equal then 0 else 1
-    | (spring::tl_record, group::tl_groups) -> if used > group then
-                                                 0
-                                               else
-                                                 if Int.equal used group then
-                                                   if valid_arrangement' (List.rev acc) group then
-                                                     count_arrangements'' [] 0 record tl_groups
-                                                   else
-                                                     0
-                                                 else
-                                                   let damaged_run = tl_record |> List.take_while ~f:(Char.equal '#') in
-                                                   let rest = tl_record |> List.drop_while ~f:(Char.equal '#') in
-                                                   match spring with
-                                                     '?' -> count_arrangements'' ('.'::acc) used tl_record damaged_groups + count_arrangements'' (List.concat [damaged_run; ('#'::acc)]) (1 + List.length damaged_run) rest damaged_groups
-                                                   | '#' -> count_arrangements'' (List.concat [damaged_run; ('#'::acc)]) (1 + List.length damaged_run) rest damaged_groups
-                                                   | '.' -> count_arrangements'' ('.'::acc) used tl_record damaged_groups
-                                                   | _ -> assert false *)
-      
 let part1 puzzle =
   puzzle
   |> List.map ~f:(fun (record, damaged_groups) -> count_arrangements [] record damaged_groups)
   |> List.fold ~init:0 ~f:(+)
   |> Int.to_string
-
-let valid_prefixes record_group checksum_groups =
-  let rec valid_prefixes' acc record_group checksum_groups =
-    match record_group with
-      [] -> let prefix = to_group_lengths (List.rev acc) in
-            if List.is_prefix checksum_groups ~prefix ~equal:Int.equal then
-              [List.length prefix]
-            else
-              []
-
-    | hd::tl -> match hd with
-                  '?' -> List.concat [
-                          valid_prefixes' ('#'::acc) tl checksum_groups;
-                          valid_prefixes' ('.'::acc) tl checksum_groups;
-                        ]
-                  | _ -> valid_prefixes' (hd::acc) tl checksum_groups
-  in
-  valid_prefixes' [] record_group checksum_groups
-  |> List.sort_and_group ~compare:Int.compare
-  |> List.map ~f:(fun group -> (List.hd_exn group, List.length group))
 
 let compress list =
   list
@@ -101,74 +51,12 @@ let uncompress list =
   |> List.map ~f:(fun (elt, count) -> repeat [] elt count)
   |> List.concat
   
-let rec non_overlapping_prefixes record_group_len checksums_hd checksums_tl =
-  let num_fits = record_group_len + 1 - (checksums_hd + 1) + 1 in
-  List.range 0 num_fits
-  (* |> List.map ~f:(fun offset -> Stdio.print_string "@3 "; Stdio.print_endline (Int.to_string offset); offset) *)
-  |> List.map ~f:(fun offset -> let record_group_len' = record_group_len - offset - (checksums_hd + 1) in
-                                valid_prefixes' record_group_len' [] checksums_tl)
-  |> List.map ~f:uncompress
-  |> List.map ~f:(List.map ~f:((+) 1))
-  |> List.concat
-  |> (fun prefix_lens -> 0::prefix_lens)
-  |> compress
-
-and overlapping_prefixes record_group_len springs_hd springs_tl checksums_hd checksums_tl =
-  let (springs_start, spring_count) = springs_hd in
-  let num_fits = checksums_hd - spring_count + 1 in
-  let min_start = springs_start - checksums_hd + spring_count in
-  let max_start_excl = min_start + num_fits in
-  (* Stdio.print_string "ss "; Stdio.print_endline (Int.to_string springs_start);
-  Stdio.print_string "sc "; Stdio.print_endline (Int.to_string spring_count);
-  Stdio.print_string "chd "; Stdio.print_endline (Int.to_string checksums_hd);
-  Stdio.print_string "fits "; Stdio.print_endline (Int.to_string num_fits);
-  Stdio.print_string "min "; Stdio.print_endline (Int.to_string min_start);
-  Stdio.print_string "max "; Stdio.print_endline (Int.to_string max_start_excl);
-  Stdio.print_string "stl "; Stdio.print_endline (Int.to_string (List.length springs_tl)); *)
-  List.range min_start max_start_excl
-  (* |> List.map ~f:(fun offset -> Stdio.print_string "@1 "; Stdio.print_endline (Int.to_string offset); offset) *)
-  |> List.filter ~f:((<=) 0)
-  |> List.filter ~f:(fun offset -> let springs_tl = springs_tl |> List.drop_while ~f:(fun (start, len) -> offset + checksums_hd <= start + len) in
-                                   match springs_tl with
-                                     [] -> offset + checksums_hd <= record_group_len
-                                   | (springs_nxt, _)::_ -> offset + checksums_hd < springs_nxt
-                    )
-  (* |> List.map ~f:(fun offset -> Stdio.print_string "@2 "; Stdio.print_endline (Int.to_string offset); offset) *)
-  |> List.map ~f:(fun offset -> let springs_tl = springs_tl |> List.drop_while ~f:(fun (start, len) -> offset + checksums_hd <= start + len) in
-                                non_overlapping_prefixes (offset - 1) checksums_hd checksums_tl
-                                |> List.map ~f:(fun (prefix_len, count) -> let record_group_len' = record_group_len - offset - (checksums_hd + 1) in
-                                                                  let springs_tl' = springs_tl |> List.map ~f:(fun (start, count) -> (start - (record_group_len - record_group_len'), count)) in
-                                                                  let checksums_tl' = List.drop checksums_tl prefix_len in
-                                                                  valid_prefixes' record_group_len' springs_tl' checksums_tl'
-                                                                  |> uncompress
-                                                                  |> (fun lens -> uncompress [(lens, count);] |> List.concat)
-                                                                  |> List.map ~f:((+) prefix_len))
-                                |> List.concat)
-  |> List.map ~f:(List.map ~f:((+) 1))
-  |> List.concat
-  |> compress
-
-and valid_prefixes' record_group_len damaged_springs checksum_groups =
-  (* Stdio.print_string "X "; Stdio.print_endline (Int.to_string record_group_len); *)
-  if record_group_len <= 0 then
-    [(0, 1)]
-  else
-  match (damaged_springs, checksum_groups) with
-    ([], []) -> [(0, 1)]
-  | ([], checksums_hd::checksums_tl) -> non_overlapping_prefixes record_group_len checksums_hd checksums_tl
-  | (_, []) ->  []
-  | (springs_hd::springs_tl, checksums_hd::checksums_tl) ->
-    overlapping_prefixes record_group_len springs_hd springs_tl checksums_hd checksums_tl
 
 let damaged_springs record_group =
   record_group
   |> List.filter_mapi ~f:(fun i c -> if Char.equal c '#' then Some(i) else None)
   |> List.group ~break:(fun a b -> not (Int.equal 1 (b - a)))
   |> List.map ~f:(fun g -> (List.hd_exn g, List.length g))
-
-
-let valid_prefixes_fast record_group checksum_groups =
-  valid_prefixes' (List.length record_group) (damaged_springs record_group) checksum_groups
 
 let split_record' record =
   let break a b = match (a, b) with
@@ -180,32 +68,85 @@ let split_record' record =
   |> List.group ~break:break
   |> List.filter ~f:(fun g -> g |> List.hd_exn |> Char.equal '.' |> not)
 
-let spring_groups_remaining groups =
-  groups
-  |> List.filter ~f:(List.exists ~f:(Char.equal '#'))
-  |> List.is_empty
-  |> not
-
-let rec count_arrangements' groups checksum_groups =
-  match (groups, checksum_groups) with
-    ([], []) -> 1
-  | ([], _) -> 0
-  | (_, []) -> if spring_groups_remaining groups then 0 else 1
-  | (group::tl, _) -> match List.hd_exn group with (* TODO: remove match *)
-                   '.' -> count_arrangements' tl checksum_groups
-                 | _ -> let prefixes = valid_prefixes_fast group checksum_groups in
-                        prefixes
-                          |> List.map ~f:(fun (len, count) -> count * count_arrangements' tl (List.drop checksum_groups len))
-                          |> List.fold ~init:0 ~f:(+)
-
 let rec repeat acc list n sep =
   if Int.equal n 0 then
     List.concat (List.tl_exn acc)
   else
     repeat (sep::list::acc) list (n - 1) sep
 
+
+let make_lut max_slots max_items =
+  let lut = Array.create ~len:(max_slots + 1) (Array.create ~len:(max_items + 1) 0) in
+  let make_entry x y = if x < 1 then 1 else lut.(y).(x - 1) + lut.(y - 1).(x) in
+  let make_row y row = row |> Array.iteri ~f:(fun x _ -> lut.(y).(x) <- if y < 1 then 0 else make_entry x y) in
+  lut
+  |> Array.iteri ~f:make_row;
+  lut
+
+  let rec splits acc num_record_groups num_checksum_groups =
+    if num_checksum_groups < num_record_groups then
+      []
+    else
+      if Int.equal num_record_groups 1 then
+        [List.rev ((num_checksum_groups)::acc)]
+      else
+        List.range 1 num_checksum_groups
+        |> List.map ~f:(fun n -> splits (n::acc) (num_record_groups - 1) (num_checksum_groups - n))
+        |> List.concat
+  
+  let count_record_group_arrangements lut record_group checksum_groups =
+  let record_group_len = List.length record_group in
+  let checksum_groups_len = List.length checksum_groups in
+  let checksum_groups_space = checksum_groups |> List.fold ~init:(checksum_groups_len - 1) ~f:(+) in
+  let dot_slots = match checksum_groups_space - record_group_len with
+                    0 -> Int.max 0 (checksum_groups_len - 1)
+                  | 1 -> checksum_groups_len
+                  | _ -> if record_group_len < checksum_groups_space then 0 else checksum_groups_len + 1
+  in
+  let dots = Int.max 0 (record_group_len - dot_slots) in
+  match List.findi record_group ~f:(fun _ c -> Char.equal c '#') with
+    Some(_i, _) -> 0
+  | None -> lut.(dot_slots).(dots)
+and match_checksum_group _lut record_group first_spring checksum_groups =
+  let _record_group_len = List.length record_group in
+  let checksum_groups_len = List.length checksum_groups in
+  let match_checksum_group' split =
+    let checksum_groups_before = List.take checksum_groups (List.hd_exn split) in
+    let num_springs = List.drop checksum_groups (List.hd_exn split) |> List.hd_exn in
+    let checksum_groups_after = List.drop checksum_groups (1 + List.hd_exn split) in
+    List.range (first_spring - num_springs + 1) (first_spring + 1)
+    |> List.filter ~f:Int.is_non_negative
+    |> List.map ~f:(fun offset -> let record_group_before = if offset > 0 then List.take record_group (offset - 1) in)
+    |> List.fold ~init:0 ~f:(+)
+  in
+  if List.is_empty record_group || List.is_empty checksum_groups then
+    0
+  else
+    splits [] 2 (checksum_groups_len + 1)
+    |> List.map ~f:(List.map ~f:((-) 1))
+    |> List.map ~f:match_checksum_group'
+    |> List.fold ~init:0 ~f:(+)
+
+let count_arrangements_fast lut (record_groups: char list list) checksum_groups =
+  let count_with_split split =
+    List.zip_exn record_groups split
+    |> List.map ~f:(fun (record_group, n) -> count_record_group_arrangements lut record_group (List.take checksum_groups n))
+    |> List.fold ~init:0 ~f:( * )
+  in
+  splits [] (List.length record_groups) (List.length checksum_groups)
+  |> List.map ~f:count_with_split
+  |> List.fold ~init:0 ~f:(+)
+
 let part2 puzzle =
-  let fast (record, checksum_groups) = count_arrangements' (split_record' record) checksum_groups in
+  let max f = puzzle
+                  |> List.map ~f:(fun input -> 1 + List.length (f input))
+                  |> List.reduce ~f:Int.max
+                  |> Option.value_exn
+  in
+  let max_slots = max snd in
+  let max_items = max fst in
+  let lut = make_lut max_slots max_items in
+  let fast (record, checksum_groups) = count_arrangements_fast lut (split_record' record) checksum_groups in
   let extended factor (record, checksum_groups) = (repeat [] record factor ['?'], repeat [] checksum_groups factor []) in
   puzzle
   |> List.map ~f:(extended 1)
