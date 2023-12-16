@@ -76,65 +76,66 @@ let rec repeat acc list n sep =
 
 
 let make_lut max_slots max_items =
-  let lut = Array.create ~len:(max_slots + 1) (Array.create ~len:(max_items + 1) 0) in
+  let lut = Array.make_matrix ~dimx:(max_slots + 1) ~dimy:(max_items + 1) 0 in
   let make_entry x y = if x < 1 then 1 else lut.(y).(x - 1) + lut.(y - 1).(x) in
-  let make_row y row = row |> Array.iteri ~f:(fun x _ -> lut.(y).(x) <- if y < 1 then 0 else make_entry x y) in
-  lut
-  |> Array.iteri ~f:make_row;
+  let make_row y = List.range 0 (max_items + 1) |> List.iter ~f:(fun x -> lut.(y).(x) <- if y < 1 then 0 else make_entry x y) in
+  List.range 0 (max_slots + 1)
+  |> List.iter ~f:make_row;
   lut
 
-  let rec splits acc num_record_groups num_checksum_groups =
-    if num_checksum_groups < num_record_groups then
-      []
+let rec splits acc record_groups checksum_groups =
+  let checksum_groups_len = List.length checksum_groups in
+  if List.length record_groups = 1 then
+    [List.rev ((checksum_groups_len)::acc)]
+  else
+    if List.is_empty checksum_groups then
+      splits (0::acc) (List.drop record_groups 1) []
     else
-      if Int.equal num_record_groups 1 then
-        [List.rev ((num_checksum_groups)::acc)]
-      else
-        List.range 1 num_checksum_groups
-        |> List.map ~f:(fun n -> splits (n::acc) (num_record_groups - 1) (num_checksum_groups - n))
-        |> List.concat
+      List.range 1 (checksum_groups_len + 1)
+      |> List.filter ~f:(fun n -> List.take checksum_groups n |> List.fold ~init:(n - 1) ~f:(+) |> (fun space_needed -> space_needed <= (List.hd_exn record_groups |> List.length)))
+      |> (fun ns -> 0::ns)
+      |> List.map ~f:(fun n -> splits (n::acc) (List.drop record_groups 1) (List.drop checksum_groups n))
+      |> List.concat
   
-  let count_record_group_arrangements lut record_group checksum_groups =
+let rec count_record_group_arrangements lut record_group checksum_groups =
   let record_group_len = List.length record_group in
   let checksum_groups_len = List.length checksum_groups in
   let checksum_groups_space = checksum_groups |> List.fold ~init:(checksum_groups_len - 1) ~f:(+) in
-  let dot_slots = match checksum_groups_space - record_group_len with
-                    0 -> Int.max 0 (checksum_groups_len - 1)
-                  | 1 -> checksum_groups_len
-                  | _ -> if record_group_len < checksum_groups_space then 0 else checksum_groups_len + 1
+  let dot_slots = match record_group_len - checksum_groups_space with
+                    0 -> 1 (* tight fit *)
+                  | _ -> if record_group_len < checksum_groups_space then 0 (* no space *) else checksum_groups_len + 1 (* some room *)
   in
-  let dots = Int.max 0 (record_group_len - dot_slots) in
+  let dots = Int.max 0 (record_group_len - checksum_groups_space) in
   match List.findi record_group ~f:(fun _ c -> Char.equal c '#') with
-    Some(_i, _) -> 0
+    Some(i, _) -> match_checksum_group lut record_group i checksum_groups
   | None -> lut.(dot_slots).(dots)
-and match_checksum_group _lut record_group first_spring checksum_groups =
-  let _record_group_len = List.length record_group in
-  let checksum_groups_len = List.length checksum_groups in
-  let match_checksum_group' split =
-    let checksum_groups_before = List.take checksum_groups (List.hd_exn split) in
-    let num_springs = List.drop checksum_groups (List.hd_exn split) |> List.hd_exn in
-    let checksum_groups_after = List.drop checksum_groups (1 + List.hd_exn split) in
-    List.range (first_spring - num_springs + 1) (first_spring + 1)
-    |> List.filter ~f:Int.is_non_negative
-    |> List.map ~f:(fun offset -> let record_group_before = if offset > 0 then List.take record_group (offset - 1) in)
-    |> List.fold ~init:0 ~f:(+)
-  in
+and match_checksum_group lut record_group first_spring checksum_groups =
   if List.is_empty record_group || List.is_empty checksum_groups then
     0
   else
-    splits [] 2 (checksum_groups_len + 1)
-    |> List.map ~f:(List.map ~f:((-) 1))
-    |> List.map ~f:match_checksum_group'
+    let record_group_len = List.length record_group in
+    let num_springs = List.hd_exn checksum_groups in
+    List.range 0 (first_spring + 1)
+    |> List.map ~f:(fun start -> if start + num_springs > record_group_len || (start + num_springs < record_group_len && List.nth_exn record_group (start + num_springs) |> Char.equal '#') then
+                                   0
+                                 else
+                                   count_record_group_arrangements lut (List.drop record_group (start + num_springs + 1)) (List.tl_exn checksum_groups)
+                   )
     |> List.fold ~init:0 ~f:(+)
-
-let count_arrangements_fast lut (record_groups: char list list) checksum_groups =
-  let count_with_split split =
-    List.zip_exn record_groups split
-    |> List.map ~f:(fun (record_group, n) -> count_record_group_arrangements lut record_group (List.take checksum_groups n))
-    |> List.fold ~init:0 ~f:( * )
+  
+let count_arrangements_fast lut record_groups checksum_groups =
+  let rec count_with_split record_groups checksum_groups split =
+    match (record_groups, split) with
+    | (rg_hd::rg_tl, s_hd::s_tl) -> (let result = count_record_group_arrangements lut rg_hd (List.take checksum_groups s_hd) in
+                                    (* Stdio.print_string "CWS "; Stdio.print_endline (Int.to_string result); *)
+                                    result * count_with_split rg_tl (List.drop checksum_groups s_hd) s_tl                                    
+                                    )
+    | _ -> 1
   in
-  splits [] (List.length record_groups) (List.length checksum_groups)
-  |> List.map ~f:count_with_split
+  Stdio.print_string "LRG "; Stdio.print_endline (Int.to_string (List.length record_groups));
+  Stdio.print_string "LCG "; Stdio.print_endline (Int.to_string (List.length checksum_groups));
+  splits [] record_groups checksum_groups
+  |> List.map ~f:(count_with_split record_groups checksum_groups)
   |> List.fold ~init:0 ~f:(+)
 
 let part2 puzzle =
@@ -144,12 +145,14 @@ let part2 puzzle =
                   |> Option.value_exn
   in
   let max_slots = max snd in
+  Stdio.print_string "MAXS "; Stdio.print_endline (Int.to_string max_slots);
   let max_items = max fst in
+  Stdio.print_string "MAXI "; Stdio.print_endline (Int.to_string max_items);
   let lut = make_lut max_slots max_items in
-  let fast (record, checksum_groups) = count_arrangements_fast lut (split_record' record) checksum_groups in
+  let fast (record, checksum_groups) = Stdio.print_endline (String.of_list record);count_arrangements_fast lut (split_record' record) checksum_groups in
   let extended factor (record, checksum_groups) = (repeat [] record factor ['?'], repeat [] checksum_groups factor []) in
   puzzle
-  |> List.map ~f:(extended 1)
+  |> List.map ~f:(extended 5)
   |> List.mapi  ~f:(fun i case -> Stdio.print_string "Case # "; Stdio.print_endline (Int.to_string i);fast case)
   |> List.map ~f:(fun n -> Stdio.print_string "== ";Stdio.print_endline (Int.to_string n); n)
   |> List.fold ~init:0 ~f:(+)
