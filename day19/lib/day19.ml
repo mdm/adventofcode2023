@@ -112,17 +112,15 @@ let process_condition_combinations condition combinations =
                                 )
                       | _ -> assert false)
   in
-  let (sat_from, sat_until) = sat_range in
-  let (unsat_from, unsat_until) = unsat_range in
   sat_combinations.(index) <- sat_range;
   unsat_combinations.(index) <- unsat_range;
-  ((sat_until - sat_from, sat_combinations), (unsat_until - unsat_from, unsat_combinations))
+  (sat_combinations, unsat_combinations)
 
 let rec process_part_combinations workflows current combinations =
   let workflow = Hashtbl.find workflows current in
   let rec process_part_combinations' workflows workflow combinations =
       match List.hd_exn workflow with
-        (Some(condition), next) -> let ((_sat_count, sat_combinations), (_unsat_count, unsat_combinations)) = process_condition_combinations condition combinations in
+        (Some(condition), next) -> let (sat_combinations, unsat_combinations) = process_condition_combinations condition combinations in
                                    process_part_combinations workflows next sat_combinations
                                    + process_part_combinations' workflows (List.tl_exn workflow) unsat_combinations
       | (None, next) -> process_part_combinations workflows next combinations
