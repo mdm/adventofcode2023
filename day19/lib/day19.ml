@@ -3,11 +3,7 @@ open Base
 let parse_condition condition =
   let condition = String.to_list condition in
   let category = List.hd_exn condition in
-  let compare = match List.nth_exn condition 1 with
-                  '<' -> (<)
-                | '>' -> (>)
-                | _ -> assert false
-  in
+  let compare = List.nth_exn condition 1 in
   let value = List.drop condition 2 |> String.of_list |> Int.of_string in
   (category, compare, value)
 
@@ -64,7 +60,11 @@ let process_condition condition part =
                    | 's' -> List.nth_exn part 3
                    | _ -> assert false
   in
-  compare part_value condition_value
+  match compare with
+    '<' -> part_value < condition_value
+  | '>' -> part_value > condition_value
+  | _ -> assert false
+  
 
 let rec process_part workflows current part =
   let workflow = Hashtbl.find workflows current in
@@ -89,6 +89,56 @@ let part1 puzzle =
   |> List.fold ~init:0 ~f:(+)
   |> Int.to_string
 
-let part2 _puzzle =
-  0
+let process_condition_combinations condition combinations =
+  let (category, compare, condition_value) = condition in
+  let index = match category with
+                     'x' -> 0
+                   | 'm' -> 1
+                   | 'a' -> 2
+                   | 's' -> 3
+                   | _ -> assert false
+  in
+  let (from, until) = combinations.(index) in
+  let sat_combinations = Array.copy combinations in
+  let unsat_combinations = Array.copy combinations in
+  let (sat_range, unsat_range) = (match compare with
+                        '<' -> (
+                                  (Int.min from condition_value, Int.min until condition_value),
+                                  (Int.max from condition_value, Int.max until condition_value)
+                                )
+                      | '>' -> (
+                                  (Int.max from (condition_value + 1), Int.max until condition_value),
+                                  (Int.min from condition_value, Int.min until (condition_value + 1))
+                                )
+                      | _ -> assert false)
+  in
+  let (sat_from, sat_until) = sat_range in
+  let (unsat_from, unsat_until) = unsat_range in
+  sat_combinations.(index) <- sat_range;
+  unsat_combinations.(index) <- unsat_range;
+  ((sat_until - sat_from, sat_combinations), (unsat_until - unsat_from, unsat_combinations))
+
+let rec process_part_combinations workflows current combinations =
+  let workflow = Hashtbl.find workflows current in
+  let rec process_part_combinations' workflows workflow combinations =
+      match List.hd_exn workflow with
+        (Some(condition), next) -> let ((_sat_count, sat_combinations), (_unsat_count, unsat_combinations)) = process_condition_combinations condition combinations in
+                                   process_part_combinations workflows next sat_combinations
+                                   + process_part_combinations' workflows (List.tl_exn workflow) unsat_combinations
+      | (None, next) -> process_part_combinations workflows next combinations
+  in
+  if String.equal current "A" then
+    combinations
+    |> Array.map ~f:(fun (from, until) -> until - from)
+    |> Array.fold ~init:1 ~f:( * )
+  else
+    if String.equal current "R" then
+      0
+    else
+      process_part_combinations' workflows (Option.value_exn workflow) combinations
+
+let part2 puzzle =
+  let (workflows, _) = puzzle in
+  [|(1, 4001); (1, 4001); (1, 4001); (1, 4001);|]
+  |> process_part_combinations workflows "in"
   |> Int.to_string
