@@ -1,4 +1,5 @@
 open Base
+open Stdio
 
 type pulse = Low | High
 
@@ -109,6 +110,25 @@ let parse input =
   |> init_conjunctions
   |> Hashtbl.of_alist_exn (module String)
 
+let dump_graph puzzle filename =
+  let nodes = Hashtbl.to_alist puzzle
+              |> List.map ~f:(fun (name, m) -> match m with
+                                                Broadcaster(_) -> Printf.sprintf "%s [shape=box];" name
+                                              | FlipFlop(_, _) -> Printf.sprintf "%s [shape=ellipse, color=blue];" name
+                                              | Conjunction(_, _) -> Printf.sprintf "%s [shape=ellipse, color=red];" name
+                             )
+              |> String.concat ~sep:"\n"
+  in
+  let edges = Hashtbl.to_alist puzzle
+            |> List.map ~f:(fun (name, m) -> match m with
+                                              Broadcaster(outputs) -> List.map outputs ~f:(fun output -> Printf.sprintf "%s -> %s;" name output)
+                                            | FlipFlop(_, outputs) -> List.map outputs ~f:(fun output -> Printf.sprintf "%s -> %s;" name output)
+                                            | Conjunction(_, outputs) -> List.map outputs ~f:(fun output -> Printf.sprintf "%s -> %s;" name output)
+                           )
+            |> List.concat
+            |> String.concat ~sep:"\n"
+  in
+  Out_channel.write_all filename ~data:(String.concat ["digraph day20 {"; nodes; edges; "}"])
 let part1 puzzle =
   List.range 0 1000
   |> List.map ~f:(fun _ -> send_pulses (0, 0) puzzle [("button", "broadcaster", Low)] false)
