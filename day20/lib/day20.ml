@@ -77,16 +77,23 @@ let process_conjunction modules sender receiver pulse =
     Conjunction(state, _) -> if List.for_all state ~f:(fun (_, p) -> is_high p) then Some(Low) else Some(High)
   | _ -> assert false
 
-exception RxTurnedOn
+exception FocusedSentLow
 
-let process_pulse modules sender receiver pulse scream =
-  match Hashtbl.find modules receiver with
-    Some(Broadcaster(outputs)) -> outputs |> List.map ~f:(fun output -> Some(receiver, output, pulse))
-  | Some(FlipFlop(_, outputs)) -> let next_pulse = process_flipflop modules receiver pulse in outputs |> List.map ~f:(fun output -> Option.map next_pulse ~f:(fun p -> (receiver, output, p)))
-  | Some(Conjunction(_, outputs)) -> let next_pulse = process_conjunction modules sender receiver pulse in outputs |> List.map ~f:(fun output -> Option.map next_pulse ~f:(fun p -> (receiver, output, p)))
-  | None -> if scream && String.equal receiver "rx" && not (is_high pulse) then raise RxTurnedOn else []
+let process_pulse modules sender receiver pulse focused =
+  let focused_sent_low = match (focused, pulse) with
+                           (Some(f), Low) -> String.equal sender f
+                         | _ -> false
+  in
+  if focused_sent_low then
+    raise FocusedSentLow
+  else
+    match Hashtbl.find modules receiver with
+      Some(Broadcaster(outputs)) -> outputs |> List.map ~f:(fun output -> Some(receiver, output, pulse))
+    | Some(FlipFlop(_, outputs)) -> let next_pulse = process_flipflop modules receiver pulse in outputs |> List.map ~f:(fun output -> Option.map next_pulse ~f:(fun p -> (receiver, output, p)))
+    | Some(Conjunction(_, outputs)) -> let next_pulse = process_conjunction modules sender receiver pulse in outputs |> List.map ~f:(fun output -> Option.map next_pulse ~f:(fun p -> (receiver, output, p)))
+    | None -> []
 
-let rec send_pulses acc modules pulses scream =
+let rec send_pulses acc modules pulses focused =
   let (lows, highs) = acc in
   let new_lows = pulses
                  |> List.count ~f:(fun (_, _, p) -> not (is_high p))
@@ -98,10 +105,10 @@ let rec send_pulses acc modules pulses scream =
     acc
   else
     pulses
-    |> List.map ~f:(fun (sender, receiver, pulse) -> process_pulse modules sender receiver pulse scream)
+    |> List.map ~f:(fun (sender, receiver, pulse) -> process_pulse modules sender receiver pulse focused)
     |> List.concat
     |> List.filter_map ~f:(fun p -> p)
-    |> (fun next_pulses -> send_pulses (lows + new_lows, highs + new_highs) modules next_pulses scream)
+    |> (fun next_pulses -> send_pulses (lows + new_lows, highs + new_highs) modules next_pulses focused)
 
 let parse input =
   let lines = String.split_lines input in
@@ -131,18 +138,28 @@ let dump_graph puzzle filename =
   Out_channel.write_all filename ~data:(String.concat ["digraph day20 {"; nodes; edges; "}"])
 let part1 puzzle =
   List.range 0 1000
-  |> List.map ~f:(fun _ -> send_pulses (0, 0) puzzle [("button", "broadcaster", Low)] false)
+  |> List.map ~f:(fun _ -> send_pulses (0, 0) puzzle [("button", "broadcaster", Low)] None)
   |> List.fold ~init:(0, 0) ~f:(fun (lows, highs) (l, h) -> (lows + l, highs + h))  
   |> (fun (lows, highs) -> lows * highs)
   |> Int.to_string
 
-let rec run_until_rx_on modules i =
+let rec run_until_focused_sends_low modules focused i =
   try
-    let (_, _) = send_pulses (0, 0) modules [("button", "broadcaster", Low)] true in
-    run_until_rx_on modules (i + 1)
+    let (_, _) = send_pulses (0, 0) modules [("button", "broadcaster", Low)] (Some(focused)) in
+    run_until_focused_sends_low modules focused (i + 1)
   with
-    RxTurnedOn -> i
+    FocusedSentLow -> i
 
-let part2 puzzle =
-  run_until_rx_on puzzle 1
+let part2 input =
+  let focused  = parse input
+                |> Hashtbl.to_alist
+                |> List.filter ~f:(fun (_, m) -> match m with
+                                                  Broadcaster(_) -> false
+                                                | FlipFlop(_, _) -> false
+                                                | Conjunction(_, outputs) -> List.length outputs > 2
+                                 )
+                |> List.map ~f:(fun (name, _) -> name)
+  in
+  List.map focused ~f:(fun f -> run_until_focused_sends_low (parse input) f 1)
+  |> List.fold ~init:1 ~f:Int.( * )
   |> Int.to_string

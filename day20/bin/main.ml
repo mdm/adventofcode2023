@@ -22,5 +22,5 @@ let () =
   part1 (parse puzzle_input)
   |> print_endline;
   dump_graph (parse puzzle_input) (String.concat [puzzle_filename; ".dot"]);
-  part2 (parse puzzle_input)
+  part2 puzzle_input
   |> print_endline;
