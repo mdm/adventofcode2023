@@ -9,6 +9,8 @@ type cube = {
 type brick = {
   id: int;
   cubes: cube list;
+  z_min: int;
+  z_max: int;
 }
 
 let coords_to_bricks id coords =
@@ -34,7 +36,7 @@ let coords_to_bricks id coords =
         if z < z_max then
           loop x_min y_min (z + 1) acc
         else
-          {id; cubes = acc}
+          {id; cubes = acc; z_min; z_max}
   in
   loop x_min y_min z_min []
 
@@ -65,7 +67,7 @@ let can_drop_cube bricks id cube =
   in
   let falling =
     bricks
-    |> List.filter ~f:blocker
+    |> List.filter ~f:(fun brick -> brick.z_min < cube.z && brick.z_max >= cube.z - 1 && blocker brick)
     |> List.for_all ~f:(fun brick -> brick.id = id)
   in
   (* Stdio.printf "Can drop %d %d %d: %b\n" cube.x cube.y cube.z (cube.z > 1 && falling); *)
@@ -78,7 +80,7 @@ let can_drop_brick bricks brick =
 let drop bricks brick =
   List.map bricks ~f:(fun b ->
     if b.id = brick.id then
-      {b with cubes = List.map b.cubes ~f:(fun c -> {c with z = c.z - 1})}
+      {b with cubes = List.map b.cubes ~f:(fun c -> {c with z = c.z - 1}); z_min = b.z_min - 1; z_max = b.z_max - 1}
     else
       b)
 
@@ -129,10 +131,16 @@ let part1 puzzle =
   |> List.length
   |> Int.to_string
   
+let parmap f xs cores =
+  xs
+  |> List.chunks_of ~length:(List.length xs / cores + 1)
+  |> List.map ~f:(fun chunk -> Stdlib.Domain.spawn (fun () -> List.map chunk ~f:f))
+  |> List.map ~f:Stdlib.Domain.join
+  |> List.concat
+
 let part2 puzzle =
   puzzle
   |> drop_all
-  |> (fun settled -> Stdio.printf "settled\n"; settled)
-  |> (fun settled -> List.mapi settled ~f:(fun i b -> Stdio.printf "%d\n" i; unstable_count settled b))
+  |> (fun settled -> parmap (unstable_count settled) settled 20)
   |> List.fold ~init:0 ~f:(+)
   |> Int.to_string
